@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"log"
 	"sync"
 	"time"
 )
@@ -174,6 +175,14 @@ func (o *OrderBook) removeFromBooks(orderID uint64) {
 		return
 	}
 
+	order, ok := o.getActiveOrder(orderID)
+	if !ok {
+		return
+	}
+	if err := o.orderRepo.Save(order); err != nil { // ensure we store the latest order data
+		log.Printf("cannot save the order %+v to the repo - repository data might be inconsistent\n", order.ID)
+	}
+
 	var mutex *sync.RWMutex
 	var oMap *orderMap
 	if tracker.Side == SideBuy {
@@ -306,9 +315,8 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 		askOrderID = order.ID
 	}
 
-	zero := decimal.NewFromInt(0)
-	trades := make([]Trade, 0, 4)
-	removeOrders := make([]uint64, 0, 4)
+	trades := make([]Trade, 0)
+	removeOrders := make([]uint64, 0)
 
 	defer func() { // enter trades
 		for _, trade := range trades {
@@ -356,9 +364,6 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 				continue // two opposing market orders are usually forbidden (rejected) - continue matching
 			case TypeLimit:
 				price = oppositeOrder.Price // crossing the spread
-				if price.Equal(zero) {      // if price is 0, cancelled order
-					continue
-				}
 			default:
 				panicOnOrderType(oppositeOrder)
 			}

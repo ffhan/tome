@@ -562,6 +562,7 @@ func TestOrderBook_Add_MarketPrice_Change(t *testing.T) {
 }
 
 func BenchmarkOrderBook_Add(b *testing.B) {
+	b.ReportAllocs()
 	var match bool
 	var err error
 	_, ob := setup(20.25)
@@ -571,18 +572,12 @@ func BenchmarkOrderBook_Add(b *testing.B) {
 		order := createRandomOrder(i + 1)
 		orders[i] = order
 	}
-	for i := 0; i < 100_000; i++ { // match 100_000 existing orders (just to store have huge bid/ask trees
-		order := createRandomOrder(i + 1 + b.N)
-		match, err = ob.Add(order)
-	}
 	b.Logf("b.N: %d bids: %d asks: %d orders: %d ", b.N, ob.bids.Len(), ob.asks.Len(), len(ob.activeOrders))
-
 	runtime.GC()
 
 	measureMemory(b)
 
 	b.ResetTimer()
-	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		match, err = ob.Add(orders[i])
 	}
