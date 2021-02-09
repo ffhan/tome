@@ -167,3 +167,19 @@ instructions: [buy 30 limit 25.5 IOC]
 +--------------------------------+-------+-------+-----+-------+-------+
 Market price: 25.5
 ```
+
+## Acknowledgements
+
+* Practical .NET for Financial Markets by Samir Jayaswal and Yogesh Shetty
+    * excellent reading material for functional and technical details about financial markets
+    * good explanation of the order matching algorithm
+* https://web.archive.org/web/20110219163448/http://howtohft.wordpress.com/2011/02/15/how-to-build-a-fast-limit-order-book/
+    * insight into technical aspects regarding trading speed, efficiency...
+* https://www.investopedia.com/investing/basics-trading-stock-know-your-orders/
+    * great summary of order types
+* https://github.com/enewhuis/liquibook
+    * inspiration for some of the data structures and approaches to the problem
+* github.com/google/uuid - a great UUID library
+* github.com/igrmk/treemap - really easy to use treemap implementation, great code generation capabilities
+* github.com/olekukonko/tablewriter - the best ASCII table writer in existence
+* github.com/shopspring/decimal - the best precise decimal Go implementation I could find
