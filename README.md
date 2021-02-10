@@ -67,7 +67,7 @@ representation of in-memory order matching throughput.
 
 `BenchmarkOrderBook_Add-12    	  627396	      1877 ns/op	    1521 B/op	       2 allocs/op`
 
-Each order insertion to the order book takes about 1.8ms, which means we can (theoretically) match ~620k orders in ~1.2
+Each order insertion to the order book takes about 1.8 μs, which means we can (theoretically) match ~620k orders in ~1.2
 seconds.
 
 After all insertions 548066776 bytes (~548MB in use for about 69660 active orders - ~7.8kB/order) are in use, before
