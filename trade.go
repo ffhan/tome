@@ -1,8 +1,8 @@
 package tome
 
 import (
+	"github.com/cockroachdb/apd"
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 	"time"
 )
 
@@ -11,8 +11,8 @@ type Trade struct {
 	Buyer, Seller uuid.UUID
 	Instrument    string
 	Qty           int64
-	Price         decimal.Decimal
-	Total         decimal.Decimal
+	Price         apd.Decimal
+	Total         apd.Decimal
 	Timestamp     time.Time
 	Rejected      bool // trade rejection (e.g. because of IOC)
 

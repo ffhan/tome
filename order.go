@@ -1,8 +1,8 @@
 package tome
 
 import (
+	"github.com/cockroachdb/apd"
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 	"strings"
 	"time"
 )
@@ -84,7 +84,7 @@ const (
 type OrderTracker struct {
 	OrderID   uint64
 	Type      OrderType
-	Price     decimal.Decimal
+	Price     apd.Decimal
 	Side      OrderSide
 	Timestamp time.Time
 }
@@ -97,10 +97,10 @@ type Order struct {
 
 	Type      OrderType
 	Params    OrderParams
-	Qty       int64           // quantity - no fractional prices available, no unsigned to prevent accidental huge orders
-	FilledQty int64           // filled quantity
-	Price     decimal.Decimal // used in limit orders
-	StopPrice decimal.Decimal // used in stop orders
+	Qty       int64       // quantity - no fractional prices available, no unsigned to prevent accidental huge orders
+	FilledQty int64       // filled quantity
+	Price     apd.Decimal // used in limit orders
+	StopPrice apd.Decimal // used in stop orders
 	Side      OrderSide
 	Cancelled bool
 }

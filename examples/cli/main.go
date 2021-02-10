@@ -3,10 +3,10 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/cockroachdb/apd"
 	"github.com/ffhan/tome"
 	"github.com/google/uuid"
 	"github.com/olekukonko/tablewriter"
-	"github.com/shopspring/decimal"
 	"os"
 	"os/exec"
 	"strconv"
@@ -19,7 +19,7 @@ var currentOrderID uint64
 func main() {
 	const instrument = "TEST"
 	tb := tome.NewTradeBook(instrument)
-	ob := tome.NewOrderBook(instrument, decimal.NewFromFloat(20.25), tb, tome.NOPOrderRepository)
+	ob := tome.NewOrderBook(instrument, *apd.New(2025, -2), tb, tome.NOPOrderRepository)
 
 	fmt.Print("enter instruction:")
 	scanner := bufio.NewScanner(os.Stdin)
@@ -111,8 +111,8 @@ func order(side tome.OrderSide, ob *tome.OrderBook, split []string) {
 		Params:     params,
 		Qty:        int64(qty),
 		FilledQty:  0,
-		Price:      decimal.NewFromFloat(price),
-		StopPrice:  decimal.Decimal{},
+		Price:      *apd.New(int64(price*10000), -4),
+		StopPrice:  apd.Decimal{},
 		Side:       side,
 		Cancelled:  false,
 	}
@@ -129,15 +129,20 @@ func print(ob *tome.OrderBook, tb *tome.TradeBook) {
 	printOrders(asks)
 	trades := tb.DailyTrades()
 	printTrades(trades)
-	fmt.Printf("Market price: %s\n", ob.MarketPrice().String())
+	marketPrice := ob.MarketPrice()
+	fmt.Printf("Market price: %s\n", marketPrice.String())
 }
 
 func printTrades(trades []tome.Trade) {
 	writer := tablewriter.NewWriter(os.Stdout)
 	writer.SetHeader([]string{"time", "BidID", "AskID", "qty", "price", "total"})
 	for _, trade := range trades {
+
+		price, _ := trade.Price.Float64()
+		qty := trade.Qty
+
 		writer.Append([]string{trade.Timestamp.String(), strconv.Itoa(int(trade.BidOrderID)), strconv.Itoa(int(trade.AskOrderID)),
-			strconv.Itoa(int(trade.Qty)), trade.Price.String(), trade.Total.String()})
+			strconv.Itoa(int(trade.Qty)), trade.Price.String(), strconv.FormatFloat(price*float64(qty), 'f', -1, 64)})
 	}
 	writer.Render()
 }

@@ -1,8 +1,8 @@
 package tome
 
 import (
+	"github.com/cockroachdb/apd"
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 	"math/rand"
 	"runtime"
 	"testing"
@@ -11,7 +11,7 @@ import (
 
 const instrument = "TEST"
 
-func createOrder(id uint64, oType OrderType, params OrderParams, qty int64, price, stopPrice decimal.Decimal, side OrderSide) Order {
+func createOrder(id uint64, oType OrderType, params OrderParams, qty int64, price, stopPrice apd.Decimal, side OrderSide) Order {
 	return Order{
 		ID:         id,
 		Instrument: instrument,
@@ -27,23 +27,24 @@ func createOrder(id uint64, oType OrderType, params OrderParams, qty int64, pric
 	}
 }
 
-func setup(price float64) (*TradeBook, *OrderBook) {
+func setup(coeff int64, exp int32) (*TradeBook, *OrderBook) {
 	tb := NewTradeBook(instrument)
-	ob := NewOrderBook(instrument, decimal.NewFromFloat(price), tb, NOPOrderRepository)
+
+	ob := NewOrderBook(instrument, *apd.New(coeff, exp), tb, NOPOrderRepository)
 	return tb, ob
 }
 
 func TestOrderBook_MarketReject(t *testing.T) {
-	_, ob := setup(20.25)
+	_, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeMarket, 0, 5, decimal.Decimal{}, decimal.Decimal{}, SideBuy))
+	matched, err := ob.Add(createOrder(1, TypeMarket, 0, 5, apd.Decimal{}, apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for market order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeMarket, 0, 2, decimal.Decimal{}, decimal.Decimal{}, SideSell))
+	matched, err = ob.Add(createOrder(2, TypeMarket, 0, 2, apd.Decimal{}, apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
@@ -53,16 +54,16 @@ func TestOrderBook_MarketReject(t *testing.T) {
 }
 
 func TestOrderBook_MarketToLimit(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for market order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeMarket, 0, 2, decimal.Decimal{}, decimal.Decimal{}, SideSell))
+	matched, err = ob.Add(createOrder(2, TypeMarket, 0, 2, apd.Decimal{}, apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
@@ -76,16 +77,16 @@ func TestOrderBook_MarketToLimit(t *testing.T) {
 }
 
 func TestOrderBook_LimitToMarket(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeMarket, 0, 2, decimal.Decimal{}, decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeMarket, 0, 2, apd.Decimal{}, apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for market order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -105,16 +106,16 @@ func TestOrderBook_LimitToMarket(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_No_Match(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 2, decimal.NewFromFloat(20.25), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 2, *apd.New(2025, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for market order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -133,16 +134,16 @@ func TestOrderBook_Limit_To_Limit_No_Match(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_Match(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 2, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 2, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for market order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -161,16 +162,16 @@ func TestOrderBook_Limit_To_Limit_Match(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_Match_FullQty(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for market order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -189,16 +190,16 @@ func TestOrderBook_Limit_To_Limit_Match_FullQty(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_First_AON_Reject(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, ParamAON, 5, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, ParamAON, 5, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for this order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 2, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 2, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -217,16 +218,16 @@ func TestOrderBook_Limit_To_Limit_First_AON_Reject(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_Second_AON_Reject(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 2, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 2, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for this order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, ParamAON, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, ParamAON, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -245,16 +246,16 @@ func TestOrderBook_Limit_To_Limit_Second_AON_Reject(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_Both_AON_Reject(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, ParamAON, 2, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, ParamAON, 2, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for this order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, ParamAON, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, ParamAON, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -273,16 +274,16 @@ func TestOrderBook_Limit_To_Limit_Both_AON_Reject(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_Both_AON(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, ParamAON, 5, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, ParamAON, 5, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for this order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, ParamAON, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, ParamAON, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -301,16 +302,16 @@ func TestOrderBook_Limit_To_Limit_Both_AON(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_First_AON(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, ParamAON, 3, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, ParamAON, 3, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for this order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -331,16 +332,16 @@ func TestOrderBook_Limit_To_Limit_First_AON(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_Second_AON(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 3, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 3, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for this order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, ParamAON, 2, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, ParamAON, 2, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -361,9 +362,9 @@ func TestOrderBook_Limit_To_Limit_Second_AON(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_First_IOC_Reject(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, ParamIOC, 3, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, ParamIOC, 3, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
@@ -373,7 +374,7 @@ func TestOrderBook_Limit_To_Limit_First_IOC_Reject(t *testing.T) {
 	if ob.asks.Len() != 0 {
 		t.Fatalf("expected no asks, got %d", ob.asks.Len())
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 2, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 2, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -392,16 +393,16 @@ func TestOrderBook_Limit_To_Limit_First_IOC_Reject(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_Second_IOC(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 3, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 3, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for this order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, ParamIOC, 2, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, ParamIOC, 2, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -420,16 +421,16 @@ func TestOrderBook_Limit_To_Limit_Second_IOC(t *testing.T) {
 }
 
 func TestOrderBook_Limit_To_Limit_Second_IOC_CancelCheck(t *testing.T) {
-	tb, ob := setup(20.25)
+	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 3, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 3, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for this order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, ParamIOC, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, ParamIOC, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
@@ -457,23 +458,23 @@ func TestOrderBook_Limit_To_Limit_Second_IOC_CancelCheck(t *testing.T) {
 
 func TestOrderBook_Add_Bids(t *testing.T) {
 	// test order sorting
-	_, ob := setup(20.25)
+	_, ob := setup(2025, -2)
 
 	type orderData struct {
 		Type      OrderType
 		Params    OrderParams
 		Qty       int64
-		Price     decimal.Decimal
-		StopPrice decimal.Decimal
+		Price     apd.Decimal
+		StopPrice apd.Decimal
 		Side      OrderSide
 	}
 
 	data := [...]orderData{
-		{TypeLimit, 0, 5, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideBuy},
-		{TypeMarket, ParamAON, 11, decimal.Decimal{}, decimal.Decimal{}, SideBuy},
-		{TypeLimit, 0, 2, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideBuy},
-		{TypeLimit, 0, 2, decimal.NewFromFloat(20.65), decimal.Decimal{}, SideBuy},
-		{TypeMarket, 0, 4, decimal.Decimal{}, decimal.Decimal{}, SideBuy},
+		{TypeLimit, 0, 5, *apd.New(2010, -2), apd.Decimal{}, SideBuy},
+		{TypeMarket, ParamAON, 11, apd.Decimal{}, apd.Decimal{}, SideBuy},
+		{TypeLimit, 0, 2, *apd.New(2010, -2), apd.Decimal{}, SideBuy},
+		{TypeLimit, 0, 2, *apd.New(2065, -2), apd.Decimal{}, SideBuy},
+		{TypeMarket, 0, 4, apd.Decimal{}, apd.Decimal{}, SideBuy},
 	}
 
 	for i, d := range data {
@@ -487,7 +488,16 @@ func TestOrderBook_Add_Bids(t *testing.T) {
 		order := ob.activeOrders[iter.Key().OrderID]
 
 		expectedData := data[sorted[i]]
-		equals := uint64(sorted[i]+1) == order.ID && expectedData.Type == order.Type && expectedData.Params == order.Params && expectedData.Qty == order.Qty && expectedData.Price == order.Price && expectedData.StopPrice == order.StopPrice && expectedData.Side == order.Side
+
+		var priceEq, stopPriceEq apd.Decimal
+		if _, err := BaseContext.Cmp(&priceEq, &expectedData.Price, &order.Price); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := BaseContext.Cmp(&stopPriceEq, &expectedData.StopPrice, &order.StopPrice); err != nil {
+			t.Fatal(err)
+		}
+
+		equals := uint64(sorted[i]+1) == order.ID && expectedData.Type == order.Type && expectedData.Params == order.Params && expectedData.Qty == order.Qty && priceEq.IsZero() && stopPriceEq.IsZero() && expectedData.Side == order.Side
 		if !equals {
 			t.Errorf("expected order ID %d to be in place %d, got a different order", sorted[i]+1, i)
 		}
@@ -499,23 +509,23 @@ func TestOrderBook_Add_Bids(t *testing.T) {
 
 func TestOrderBook_Add_Asks(t *testing.T) {
 	// test order sorting
-	_, ob := setup(20.25)
+	_, ob := setup(2025, -2)
 
 	type orderData struct {
 		Type      OrderType
 		Params    OrderParams
 		Qty       int64
-		Price     decimal.Decimal
-		StopPrice decimal.Decimal
+		Price     apd.Decimal
+		StopPrice apd.Decimal
 		Side      OrderSide
 	}
 
 	data := [...]orderData{
-		{TypeLimit, 0, 7, decimal.NewFromFloat(20.00), decimal.Decimal{}, SideSell},
-		{TypeLimit, 0, 2, decimal.NewFromFloat(20.13), decimal.Decimal{}, SideSell},
-		{TypeLimit, 0, 8, decimal.NewFromFloat(20.00), decimal.Decimal{}, SideSell},
-		{TypeMarket, 0, 9, decimal.Decimal{}, decimal.Decimal{}, SideSell},
-		{TypeLimit, 0, 3, decimal.NewFromFloat(20.55), decimal.Decimal{}, SideSell},
+		{TypeLimit, 0, 7, *apd.New(2000, -2), apd.Decimal{}, SideSell},
+		{TypeLimit, 0, 2, *apd.New(2013, -2), apd.Decimal{}, SideSell},
+		{TypeLimit, 0, 8, *apd.New(2000, -2), apd.Decimal{}, SideSell},
+		{TypeMarket, 0, 9, apd.Decimal{}, apd.Decimal{}, SideSell},
+		{TypeLimit, 0, 3, *apd.New(2055, -2), apd.Decimal{}, SideSell},
 	}
 
 	for i, d := range data {
@@ -529,7 +539,16 @@ func TestOrderBook_Add_Asks(t *testing.T) {
 		order := ob.activeOrders[iter.Key().OrderID]
 
 		expectedData := data[sorted[i]]
-		equals := uint64(sorted[i]+1) == order.ID && expectedData.Type == order.Type && expectedData.Params == order.Params && expectedData.Qty == order.Qty && expectedData.Price == order.Price && expectedData.StopPrice == order.StopPrice && expectedData.Side == order.Side
+
+		var priceEq, stopPriceEq apd.Decimal
+		if _, err := BaseContext.Cmp(&priceEq, &expectedData.Price, &order.Price); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := BaseContext.Cmp(&stopPriceEq, &expectedData.StopPrice, &order.StopPrice); err != nil {
+			t.Fatal(err)
+		}
+
+		equals := uint64(sorted[i]+1) == order.ID && expectedData.Type == order.Type && expectedData.Params == order.Params && expectedData.Qty == order.Qty && priceEq.IsZero() && stopPriceEq.IsZero() && expectedData.Side == order.Side
 		if !equals {
 			t.Errorf("expected order ID %d to be in place %d, got a different order", sorted[i]+1, i)
 		}
@@ -540,23 +559,27 @@ func TestOrderBook_Add_Asks(t *testing.T) {
 }
 
 func TestOrderBook_Add_MarketPrice_Change(t *testing.T) {
-	_, ob := setup(20.25)
+	_, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 2, decimal.NewFromFloat(20.10), decimal.Decimal{}, SideSell))
+	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 2, *apd.New(2010, -2), apd.Decimal{}, SideSell))
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for market order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, decimal.NewFromFloat(20.12), decimal.Decimal{}, SideBuy))
+	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
 		t.Error(err)
 	}
 	if !matched {
 		t.Errorf("expected a match for this order, got a match")
 	}
-	if !ob.marketPrice.Equal(decimal.NewFromFloat(20.12)) {
+	var eq apd.Decimal
+	if _, err := BaseContext.Cmp(&eq, &ob.marketPrice, apd.New(2012, -2)); err != nil {
+		t.Fatal(err)
+	}
+	if !eq.IsZero() {
 		t.Errorf("expected market price to be %f, got %s", 20.12, ob.marketPrice.String())
 	}
 }
@@ -565,7 +588,7 @@ func BenchmarkOrderBook_Add(b *testing.B) {
 	b.ReportAllocs()
 	var match bool
 	var err error
-	_, ob := setup(20.25)
+	_, ob := setup(2025, -2)
 
 	orders := make([]Order, b.N)
 	for i := range orders {
@@ -605,11 +628,11 @@ func createRandomOrder(i int) Order {
 	isIOC := rand.Int()%25 == 0
 
 	qty := int64(rand.Int()%190) + 10
-	price := 20.25 + (rand.Float64()-0.5)*4
+	price := apd.New(int64(2025+rand.Intn(200)-100), -2)
 
 	oType := TypeLimit
 	if isMarket {
-		price = 0
+		price = apd.New(0, 0)
 		oType = TypeMarket
 	}
 	var params OrderParams
@@ -633,8 +656,8 @@ func createRandomOrder(i int) Order {
 		Params:     params,
 		Qty:        qty,
 		FilledQty:  0,
-		Price:      decimal.NewFromFloat(price),
-		StopPrice:  decimal.Decimal{},
+		Price:      *price,
+		StopPrice:  apd.Decimal{},
 		Side:       oSide,
 		Cancelled:  false,
 	}

@@ -3,8 +3,8 @@ package tome
 import (
 	"errors"
 	"fmt"
+	"github.com/cockroachdb/apd"
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 	"log"
 	"sync"
 	"time"
@@ -19,12 +19,19 @@ var (
 	ErrInvalidMarketPrice = errors.New("price has to be zero for market orders")
 	ErrInvalidLimitPrice  = errors.New("price has to be set for limit orders")
 	ErrInvalidStopPrice   = errors.New("stop price has to be set for a stop order")
+
+	BaseContext = apd.Context{
+		Precision:   0,               // no rounding
+		MaxExponent: apd.MaxExponent, // up to 10^5 exponent
+		MinExponent: apd.MinExponent, // support only 4 decimal places
+		Traps:       apd.DefaultTraps,
+	}
 )
 
 type OrderBook struct {
 	Instrument string // instrument name
 
-	marketPrice      decimal.Decimal // current market price
+	marketPrice      apd.Decimal // current market price
 	marketPriceMutex sync.RWMutex
 
 	tradeBook *TradeBook // trade book ptr
@@ -58,7 +65,7 @@ func makeComparator(priceReverse bool) func(a, b OrderTracker) bool {
 		} else if a.Type == TypeMarket && b.Type == TypeMarket {
 			return a.Timestamp.Before(b.Timestamp) // if both market order by time
 		}
-		priceCmp := a.Price.Cmp(b.Price)
+		priceCmp := a.Price.Cmp(&b.Price)
 		if priceCmp == 0 {
 			return a.Timestamp.Before(b.Timestamp)
 		}
@@ -66,7 +73,7 @@ func makeComparator(priceReverse bool) func(a, b OrderTracker) bool {
 	}
 }
 
-func NewOrderBook(instrument string, marketPrice decimal.Decimal, tradeBook *TradeBook, orderRepo OrderRepository) *OrderBook {
+func NewOrderBook(instrument string, marketPrice apd.Decimal, tradeBook *TradeBook, orderRepo OrderRepository) *OrderBook {
 	return &OrderBook{
 		Instrument:    instrument,
 		marketPrice:   marketPrice,
@@ -95,13 +102,13 @@ func (o *OrderBook) GetAsks() []Order {
 	return orders
 }
 
-func (o *OrderBook) MarketPrice() decimal.Decimal {
+func (o *OrderBook) MarketPrice() apd.Decimal {
 	o.marketPriceMutex.RLock()
 	defer o.marketPriceMutex.RUnlock()
 	return o.marketPrice
 }
 
-func (o *OrderBook) SetMarketPrice(price decimal.Decimal) {
+func (o *OrderBook) SetMarketPrice(price apd.Decimal) {
 	o.marketPriceMutex.Lock()
 	defer o.marketPriceMutex.Unlock()
 	o.marketPrice = price
@@ -356,7 +363,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 			continue // couldn't find a match - other offer requires AON but our order can't fill it completely
 		}
 
-		var price decimal.Decimal
+		var price apd.Decimal
 		switch order.Type { // look only after the best available price
 		case TypeMarket:
 			switch oppositeOrder.Type {
@@ -375,7 +382,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 					price = myPrice
 				case TypeLimit:
 					// check if we can cross the spread
-					if myPrice.Cmp(oppositeOrder.Price) < 0 {
+					if myPrice.Cmp(&oppositeOrder.Price) < 0 {
 						return matched, nil // other prices are going to be even higher than our limit
 					} else {
 						// our bid is higher or equal to their ask - set price to myPrice
@@ -390,7 +397,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 					price = myPrice
 				case TypeLimit:
 					// check if we can cross the spread
-					if myPrice.Cmp(oppositeOrder.Price) > 0 {
+					if myPrice.Cmp(&oppositeOrder.Price) > 0 {
 						// we can't match since our ask is higher than the best bid
 						return matched, nil
 					} else {
@@ -421,7 +428,6 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 			Instrument: o.Instrument,
 			Qty:        qty,
 			Price:      price,
-			Total:      price.Mul(decimal.NewFromInt(qty)),
 			Timestamp:  time.Now(),
 			BidOrderID: bidOrderID,
 			AskOrderID: askOrderID,

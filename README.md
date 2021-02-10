@@ -65,15 +65,18 @@ Order book & trade books are per-instrument objects, one order book can only han
 The current figures are without implemented stop orders, manual cancellations and persistent storage. They are mostly a
 representation of in-memory order matching throughput.
 
-`BenchmarkOrderBook_Add-12    	  434086	      3378 ns/op	    2103 B/op	      44 allocs/op`
+`BenchmarkOrderBook_Add-12    	  627396	      1877 ns/op	    1521 B/op	       2 allocs/op`
 
-Each order insertion to the order book takes about 3.4ms, which means we can (theoretically) match ~400k orders in 1.4
+Each order insertion to the order book takes about 1.8ms, which means we can (theoretically) match ~620k orders in ~1.2
 seconds.
 
-Reported allocations are really high per addition, around 2kB - not acceptable & will require memory profiling. About
-70% of memory usage comes through the Add method, about 250% increase from the setup state.
+After all insertions 548066776 bytes (~548MB in use for about 69660 active orders - ~7.8kB/order) are in use, before
+insertions 123231848 bytes. Reported allocations are really high per insertion, around 1.6kB - not acceptable & will
+require memory profiling. About 78% of total memory usage comes through the Add method, 345% increase from the setup
+state.
 
-My goal is to reach about 2500 ns/op, which would allow throughput of ~400k in 1 second.
+`cockroachdb/apd` gave a significant performance improvement over `shopspring/decimal` mainly because of huge memory
+usage improvement which drastically lowered the allocation rates (from 44 alloc/op to 5 alloc/op).
 
 ## CLI example
 
@@ -179,7 +182,7 @@ Market price: 25.5
     * great summary of order types
 * https://github.com/enewhuis/liquibook
     * inspiration for some of the data structures and approaches to the problem
-* github.com/google/uuid - a great UUID library
-* github.com/igrmk/treemap - really easy to use treemap implementation, great code generation capabilities
-* github.com/olekukonko/tablewriter - the best ASCII table writer in existence
-* github.com/shopspring/decimal - the best precise decimal Go implementation I could find
+* https://github.com/google/uuid - a great UUID library
+* https://github.com/igrmk/treemap - really easy to use treemap implementation, great code generation capabilities
+* https://github.com/olekukonko/tablewriter - the best ASCII table writer in existence
+* https://github.com/cockroachdb/apd - fast & relatively memory efficient decimal Go implementation
