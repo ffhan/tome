@@ -84,9 +84,9 @@ const (
 type OrderTracker struct {
 	OrderID   uint64
 	Type      OrderType
-	Price     apd.Decimal
+	Price     float64
 	Side      OrderSide
-	Timestamp time.Time
+	Timestamp int64 // nanoseconds since Epoch
 }
 
 type Order struct {

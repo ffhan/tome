@@ -1,20 +1,21 @@
 package tome
 
-import "sync"
+import (
+	"sort"
+	"sync"
+)
 
 type TradeBook struct {
 	Instrument string
 
-	trades      []Trade
-	todayTrades map[uint64]*Trade
-	tradeMutex  sync.RWMutex
+	trades     map[uint64]Trade
+	tradeMutex sync.RWMutex
 }
 
 func NewTradeBook(instrument string) *TradeBook {
 	return &TradeBook{
-		Instrument:  instrument,
-		trades:      make([]Trade, 0, 1024),
-		todayTrades: make(map[uint64]*Trade),
+		Instrument: instrument,
+		trades:     make(map[uint64]Trade),
 	}
 }
 
@@ -22,17 +23,16 @@ func (t *TradeBook) Enter(trade Trade) {
 	t.tradeMutex.Lock()
 	defer t.tradeMutex.Unlock()
 
-	t.trades = append(t.trades, trade)
-	t.todayTrades[trade.ID] = &t.trades[len(t.trades)-1]
+	t.trades[trade.ID] = trade
 }
 
 func (t *TradeBook) Reject(tradeID uint64) {
 	t.tradeMutex.Lock()
 	defer t.tradeMutex.Unlock()
 
-	if trade, ok := t.todayTrades[tradeID]; ok {
+	if trade, ok := t.trades[tradeID]; ok {
 		trade.Rejected = true
-		t.todayTrades[tradeID] = trade
+		t.trades[tradeID] = trade
 	}
 }
 
@@ -41,6 +41,13 @@ func (t *TradeBook) DailyTrades() []Trade {
 	defer t.tradeMutex.RUnlock()
 
 	tradesCopy := make([]Trade, len(t.trades))
-	copy(tradesCopy, t.trades)
+	i := 0
+	for _, trade := range t.trades {
+		tradesCopy[i] = trade
+		i += 1
+	}
+	sort.Slice(tradesCopy, func(i, j int) bool {
+		return tradesCopy[i].Timestamp.Before(tradesCopy[j].Timestamp)
+	})
 	return tradesCopy
 }

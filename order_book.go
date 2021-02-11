@@ -63,13 +63,16 @@ func makeComparator(priceReverse bool) func(a, b OrderTracker) bool {
 		} else if a.Type != TypeMarket && b.Type == TypeMarket {
 			return false
 		} else if a.Type == TypeMarket && b.Type == TypeMarket {
-			return a.Timestamp.Before(b.Timestamp) // if both market order by time
+			return a.Timestamp < b.Timestamp // if both market order by time
 		}
-		priceCmp := a.Price.Cmp(&b.Price)
+		priceCmp := a.Price - b.Price
 		if priceCmp == 0 {
-			return a.Timestamp.Before(b.Timestamp)
+			return a.Timestamp < b.Timestamp
 		}
-		return priceCmp*factor == -1
+		if priceCmp < 0 {
+			return -1*factor == -1
+		}
+		return factor == -1
 	}
 }
 
@@ -142,9 +145,13 @@ func (o *OrderBook) addToBooks(order Order) error {
 		mutex = &o.askMutex
 		oMap = o.asks
 	}
+	price, err := order.Price.Float64() // might be really slow
+	if err != nil {
+		return err
+	}
 	tracker := OrderTracker{
-		Price:     order.Price,
-		Timestamp: order.Timestamp,
+		Price:     price,
+		Timestamp: order.Timestamp.UnixNano(),
 		OrderID:   order.ID,
 		Type:      order.Type,
 		Side:      order.Side,
