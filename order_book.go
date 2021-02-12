@@ -329,17 +329,16 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 		askOrderID = order.ID
 	}
 
-	trades := make([]Trade, 0)
 	removeOrders := make([]uint64, 0)
 
-	defer func() { // enter trades
-		for _, trade := range trades {
-			o.tradeBook.Enter(trade)
-		}
-		if len(trades) > 0 {
-			o.SetMarketPrice(trades[len(trades)-1].Price) // set market price as last traded price
-		}
-	}()
+	//defer func() { // enter trades
+	//	for _, trade := range trades {
+	//		o.tradeBook.Enter(trade)
+	//	}
+	//	if len(trades) > 0 {
+	//		o.SetMarketPrice(lastTradePrice) // set market price as last traded price
+	//	}
+	//}()
 
 	defer func() {
 		for _, orderID := range removeOrders {
@@ -429,7 +428,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 		order.FilledQty += qty
 		oppositeOrder.FilledQty += qty
 
-		trades = append(trades, Trade{
+		o.tradeBook.Enter(Trade{
 			Buyer:      buyer,
 			Seller:     seller,
 			Instrument: o.Instrument,
@@ -439,6 +438,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 			BidOrderID: bidOrderID,
 			AskOrderID: askOrderID,
 		})
+		o.SetMarketPrice(price)
 		matched = true
 		if oppositeOrder.UnfilledQty() == 0 { // if the other order is filled completely - remove it from the order book
 			removeOrders = append(removeOrders, oppositeOrder.ID)

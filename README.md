@@ -65,15 +65,17 @@ Order book & trade books are per-instrument objects, one order book can only han
 The current figures are without implemented stop orders, manual cancellations and persistent storage. They are mostly a
 representation of in-memory order matching throughput.
 
-`BenchmarkOrderBook_Add-12    	  868053	      1299 ns/op	     527 B/op	       4 allocs/op`
+`BenchmarkOrderBook_Add-12    	 1000000	      1199 ns/op	     235 B/op	       3 allocs/op`
 
-Each order insertion to the order book takes about 1.3 μs, which means we can (theoretically) match ~870k orders in ~
-1.12 seconds.
+Each order insertion to the order book takes about 1.2 μs, which means we can (theoretically) match ~834k orders in 1
+second.
 
-After all insertions 378069448 bytes (~357MB in use for about 110k active orders - ~3.2kB/order) are in use, before
-insertions 208114896 bytes. Reported allocations are really high per insertion, around 1.3kB - not acceptable & will
-require memory profiling. About 45% of total memory usage comes through the Add method, 82% increase from the setup
-state.
+After all insertions 289349744 bytes (~289MB in use for about 118k active orders - ~2.4kB/order) are in use, before
+insertions 208124256 bytes. Reported allocations are around 235 B/op. About 28% of total memory usage comes through the
+Add method, 39% increase from the setup state.
+
+Huge performance improvements came from OrderTracker tracking only nanoseconds as timestamps, prices as float64s and
+smarter memory management. My goal is to hit 500 ns/op to be able to hit 2 million operations per second.
 
 `cockroachdb/apd` gave a significant performance improvement over `shopspring/decimal` mainly because of huge memory
 usage improvement which drastically lowered the allocation rates (from 44 alloc/op to 4 alloc/op).
