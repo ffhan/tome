@@ -331,15 +331,6 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 
 	removeOrders := make([]uint64, 0)
 
-	//defer func() { // enter trades
-	//	for _, trade := range trades {
-	//		o.tradeBook.Enter(trade)
-	//	}
-	//	if len(trades) > 0 {
-	//		o.SetMarketPrice(lastTradePrice) // set market price as last traded price
-	//	}
-	//}()
-
 	defer func() {
 		for _, orderID := range removeOrders {
 			o.removeFromBooks(orderID)
