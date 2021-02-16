@@ -97,11 +97,11 @@ func TestOrderBook_LimitToMarket(t *testing.T) {
 		t.Fatal("expected one trade, got none")
 	}
 	t.Logf("trade: %+v", tb.trades[0])
-	if ob.asks.Len() != 0 {
-		t.Errorf("expected 0 asks, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 0 {
+		t.Errorf("expected 0 asks, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 1 {
-		t.Errorf("expected 1 bid, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 1 {
+		t.Errorf("expected 1 bid, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -125,11 +125,11 @@ func TestOrderBook_Limit_To_Limit_No_Match(t *testing.T) {
 	if len(tb.trades) != 0 {
 		t.Errorf("expected no trades, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 1 {
-		t.Errorf("expected 1 ask, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 1 {
+		t.Errorf("expected 1 ask, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 1 {
-		t.Errorf("expected 1 bid, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 1 {
+		t.Errorf("expected 1 bid, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -153,11 +153,11 @@ func TestOrderBook_Limit_To_Limit_Match(t *testing.T) {
 	if len(tb.trades) != 1 {
 		t.Errorf("expected a trade, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 0 {
-		t.Errorf("expected 0 asks, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 0 {
+		t.Errorf("expected 0 asks, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 1 {
-		t.Errorf("expected 1 bid, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 1 {
+		t.Errorf("expected 1 bid, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -181,11 +181,11 @@ func TestOrderBook_Limit_To_Limit_Match_FullQty(t *testing.T) {
 	if len(tb.trades) != 1 {
 		t.Errorf("expected a trade, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 0 {
-		t.Errorf("expected 0 asks, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 0 {
+		t.Errorf("expected 0 asks, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 0 {
-		t.Errorf("expected 0 bids, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 0 {
+		t.Errorf("expected 0 bids, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -209,11 +209,11 @@ func TestOrderBook_Limit_To_Limit_First_AON_Reject(t *testing.T) {
 	if len(tb.trades) != 0 {
 		t.Errorf("expected no trades, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 1 {
-		t.Errorf("expected 1 ask, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 1 {
+		t.Errorf("expected 1 ask, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 1 {
-		t.Errorf("expected 1 bid, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 1 {
+		t.Errorf("expected 1 bid, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -237,11 +237,11 @@ func TestOrderBook_Limit_To_Limit_Second_AON_Reject(t *testing.T) {
 	if len(tb.trades) != 0 {
 		t.Errorf("expected no trades, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 1 {
-		t.Errorf("expected 1 ask, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 1 {
+		t.Errorf("expected 1 ask, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 1 {
-		t.Errorf("expected 1 bid, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 1 {
+		t.Errorf("expected 1 bid, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -265,11 +265,11 @@ func TestOrderBook_Limit_To_Limit_Both_AON_Reject(t *testing.T) {
 	if len(tb.trades) != 0 {
 		t.Errorf("expected no trades, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 1 {
-		t.Errorf("expected 1 ask, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 1 {
+		t.Errorf("expected 1 ask, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 1 {
-		t.Errorf("expected 1 bid, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 1 {
+		t.Errorf("expected 1 bid, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -293,11 +293,11 @@ func TestOrderBook_Limit_To_Limit_Both_AON(t *testing.T) {
 	if len(tb.trades) != 1 {
 		t.Errorf("expected a trade, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 0 {
-		t.Errorf("expected 0 asks, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 0 {
+		t.Errorf("expected 0 asks, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 0 {
-		t.Errorf("expected 0 bids, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 0 {
+		t.Errorf("expected 0 bids, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -323,11 +323,11 @@ func TestOrderBook_Limit_To_Limit_First_AON(t *testing.T) {
 	} else {
 		t.Logf("trade: %+v", tb.trades[0])
 	}
-	if ob.asks.Len() != 0 {
-		t.Errorf("expected 0 asks, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 0 {
+		t.Errorf("expected 0 asks, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 1 {
-		t.Errorf("expected 1 bid, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 1 {
+		t.Errorf("expected 1 bid, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -353,11 +353,11 @@ func TestOrderBook_Limit_To_Limit_Second_AON(t *testing.T) {
 	} else {
 		t.Logf("trade: %+v", tb.trades[0])
 	}
-	if ob.asks.Len() != 1 {
-		t.Errorf("expected 1 ask, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 1 {
+		t.Errorf("expected 1 ask, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 0 {
-		t.Errorf("expected 0 bids, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 0 {
+		t.Errorf("expected 0 bids, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -371,8 +371,8 @@ func TestOrderBook_Limit_To_Limit_First_IOC_Reject(t *testing.T) {
 	if matched {
 		t.Errorf("expected no match for this order, got a match")
 	}
-	if ob.asks.Len() != 0 {
-		t.Fatalf("expected no asks, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 0 {
+		t.Fatalf("expected no asks, got %d", ob.orders.Asks.Len())
 	}
 	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 2, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
 	if err != nil {
@@ -384,11 +384,11 @@ func TestOrderBook_Limit_To_Limit_First_IOC_Reject(t *testing.T) {
 	if len(tb.trades) != 0 {
 		t.Errorf("expected no trades, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 0 {
-		t.Errorf("expected 0 asks, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 0 {
+		t.Errorf("expected 0 asks, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 1 {
-		t.Errorf("expected 1 bid, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 1 {
+		t.Errorf("expected 1 bid, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -412,11 +412,11 @@ func TestOrderBook_Limit_To_Limit_Second_IOC(t *testing.T) {
 	if len(tb.trades) != 1 {
 		t.Errorf("expected no trades, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 1 {
-		t.Errorf("expected 1 ask, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 1 {
+		t.Errorf("expected 1 ask, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 0 {
-		t.Errorf("expected 0 bids, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 0 {
+		t.Errorf("expected 0 bids, got %d", ob.orders.Bids.Len())
 	}
 }
 
@@ -440,11 +440,11 @@ func TestOrderBook_Limit_To_Limit_Second_IOC_CancelCheck(t *testing.T) {
 	if len(tb.trades) != 1 {
 		t.Errorf("expected no trades, got %d trades", len(tb.trades))
 	}
-	if ob.asks.Len() != 0 {
-		t.Errorf("expected 0 asks, got %d", ob.asks.Len())
+	if ob.orders.Asks.Len() != 0 {
+		t.Errorf("expected 0 asks, got %d", ob.orders.Asks.Len())
 	}
-	if ob.bids.Len() != 0 {
-		t.Errorf("expected 0 bids, got %d", ob.bids.Len())
+	if ob.orders.Bids.Len() != 0 {
+		t.Errorf("expected 0 bids, got %d", ob.orders.Bids.Len())
 	}
 	order := ob.activeOrders[1]
 	if !order.IsCancelled() {
@@ -484,7 +484,7 @@ func TestOrderBook_Add_Bids(t *testing.T) {
 	sorted := []int{1, 4, 3, 0, 2}
 
 	i := 0
-	for iter := ob.bids.Iterator(); iter.Valid(); iter.Next() {
+	for iter := ob.orders.Bids.Iterator(); iter.Valid(); iter.Next() {
 		order := ob.activeOrders[iter.Key().OrderID]
 
 		expectedData := data[sorted[i]]
@@ -535,7 +535,7 @@ func TestOrderBook_Add_Asks(t *testing.T) {
 	sorted := []int{3, 0, 2, 1, 4}
 
 	i := 0
-	for iter := ob.asks.Iterator(); iter.Valid(); iter.Next() {
+	for iter := ob.orders.Asks.Iterator(); iter.Valid(); iter.Next() {
 		order := ob.activeOrders[iter.Key().OrderID]
 
 		expectedData := data[sorted[i]]
@@ -595,7 +595,7 @@ func BenchmarkOrderBook_Add(b *testing.B) {
 		order := createRandomOrder(i + 1)
 		orders[i] = order
 	}
-	b.Logf("b.N: %d bids: %d asks: %d orders: %d ", b.N, ob.bids.Len(), ob.asks.Len(), len(ob.activeOrders))
+	b.Logf("b.N: %d bids: %d asks: %d orders: %d ", b.N, ob.orders.Bids.Len(), ob.orders.Asks.Len(), len(ob.activeOrders))
 	runtime.GC()
 
 	measureMemory(b)
@@ -608,7 +608,7 @@ func BenchmarkOrderBook_Add(b *testing.B) {
 
 	_ = match
 	_ = err
-	b.Logf("orders len: %d bids len: %d asks len: %d", len(ob.activeOrders), ob.bids.Len(), ob.asks.Len())
+	b.Logf("orders len: %d bids len: %d asks len: %d", len(ob.activeOrders), ob.orders.Bids.Len(), ob.orders.Asks.Len())
 
 	measureMemory(b)
 }

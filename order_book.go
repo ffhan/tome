@@ -38,24 +38,21 @@ type OrderBook struct {
 
 	orderRepo    OrderRepository
 	activeOrders map[uint64]Order
-	orderMutex   sync.RWMutex
 
+	orders     *orderContainer
+	stopOrders *orderContainer
+
+	orderMutex sync.RWMutex
 	matchMutex sync.Mutex // mutex that ensures that matching is always sequential
-
-	bids     *orderMap // active bids
-	bidMutex sync.RWMutex
-	asks     *orderMap // active asks
-	askMutex sync.RWMutex
-
-	orderTrackers     map[uint64]OrderTracker // mapping from ID to OrderTracker
-	orderTrackerMutex sync.RWMutex
 }
 
+type LessFunc func(a, b OrderTracker) bool
+
 // FIFO - https://corporatefinanceinstitute.com/resources/knowledge/trading-investing/matching-orders/
-func makeComparator(priceReverse bool) func(a, b OrderTracker) bool {
-	factor := 1
-	if priceReverse {
-		factor = -1
+func makeComparator(priceDescending bool) LessFunc {
+	factor := -1
+	if priceDescending {
+		factor = 1
 	}
 	return func(a, b OrderTracker) bool {
 		if a.Type == TypeMarket && b.Type != TypeMarket {
@@ -70,36 +67,37 @@ func makeComparator(priceReverse bool) func(a, b OrderTracker) bool {
 			return a.Timestamp < b.Timestamp
 		}
 		if priceCmp < 0 {
-			return -1*factor == -1
+			return factor == -1
 		}
-		return factor == -1
+		return factor == 1
 	}
 }
 
 func NewOrderBook(instrument string, marketPrice apd.Decimal, tradeBook *TradeBook, orderRepo OrderRepository) *OrderBook {
+	bidLess := makeComparator(true)
+	askLess := makeComparator(false)
 	return &OrderBook{
-		Instrument:    instrument,
-		marketPrice:   marketPrice,
-		asks:          newOrderMap(makeComparator(false)),
-		bids:          newOrderMap(makeComparator(true)),
-		orderTrackers: make(map[uint64]OrderTracker),
-		activeOrders:  make(map[uint64]Order),
-		orderRepo:     orderRepo,
-		tradeBook:     tradeBook,
+		Instrument:   instrument,
+		marketPrice:  marketPrice,
+		tradeBook:    tradeBook,
+		orderRepo:    orderRepo,
+		activeOrders: make(map[uint64]Order),
+		orders:       NewOrderContainer(bidLess, askLess),
+		stopOrders:   NewOrderContainer(bidLess, askLess),
 	}
 }
 
 func (o *OrderBook) GetBids() []Order {
-	orders := make([]Order, 0, o.bids.Len())
-	for iter := o.bids.Iterator(); iter.Valid(); iter.Next() {
+	orders := make([]Order, 0, o.orders.Len(SideBuy))
+	for iter := o.orders.Iterator(SideBuy); iter.Valid(); iter.Next() {
 		orders = append(orders, o.activeOrders[iter.Key().OrderID])
 	}
 	return orders
 }
 
 func (o *OrderBook) GetAsks() []Order {
-	orders := make([]Order, 0, o.asks.Len())
-	for iter := o.asks.Iterator(); iter.Valid(); iter.Next() {
+	orders := make([]Order, 0, o.orders.Len(SideSell))
+	for iter := o.orders.Iterator(SideSell); iter.Valid(); iter.Next() {
 		orders = append(orders, o.activeOrders[iter.Key().OrderID])
 	}
 	return orders
@@ -135,16 +133,6 @@ func (o *OrderBook) setActiveOrder(order Order) error {
 }
 
 func (o *OrderBook) addToBooks(order Order) error {
-	var mutex *sync.RWMutex
-	var oMap *orderMap
-
-	if order.IsBid() {
-		mutex = &o.bidMutex
-		oMap = o.bids
-	} else {
-		mutex = &o.askMutex
-		oMap = o.asks
-	}
 	price, err := order.Price.Float64() // might be really slow
 	if err != nil {
 		return err
@@ -157,14 +145,11 @@ func (o *OrderBook) addToBooks(order Order) error {
 		Side:      order.Side,
 	}
 
-	mutex.Lock()
-	defer mutex.Unlock()
-	oMap.Set(tracker, true) // enter pointer to the tree
-	if err := o.setOrderTracker(tracker); err != nil {
-		return err
-	}
+	o.orderMutex.Lock()
+	o.orders.Add(tracker) // enter pointer to the tree
+	o.orderMutex.Unlock()
 	if err := o.setActiveOrder(order); err != nil {
-		o.removeOrderTracker(order.ID)
+		o.orders.Remove(order.ID)
 		return err
 	}
 	return o.orderRepo.Save(order)
@@ -181,14 +166,6 @@ func (o *OrderBook) updateActiveOrder(order Order) error {
 }
 
 func (o *OrderBook) removeFromBooks(orderID uint64) {
-	o.orderTrackerMutex.Lock()
-	defer o.orderTrackerMutex.Unlock()
-
-	tracker, ok := o.orderTrackers[orderID]
-	if !ok {
-		return
-	}
-
 	order, ok := o.getActiveOrder(orderID)
 	if !ok {
 		return
@@ -197,23 +174,8 @@ func (o *OrderBook) removeFromBooks(orderID uint64) {
 		log.Printf("cannot save the order %+v to the repo - repository data might be inconsistent\n", order.ID)
 	}
 
-	var mutex *sync.RWMutex
-	var oMap *orderMap
-	if tracker.Side == SideBuy {
-		mutex = &o.bidMutex
-		oMap = o.bids
-	} else {
-		mutex = &o.askMutex
-		oMap = o.asks
-	}
-
-	mutex.Lock()
-	oMap.Del(tracker) // remove from books
-	mutex.Unlock()
-
-	delete(o.orderTrackers, orderID) // remove the tracker
-
 	o.orderMutex.Lock()
+	o.orders.Remove(orderID)
 	delete(o.activeOrders, orderID) // remove an active order
 	o.orderMutex.Unlock()
 }
@@ -231,29 +193,11 @@ func (o *OrderBook) Cancel(id uint64) error {
 }
 
 func (o *OrderBook) getOrderTracker(orderID uint64) (OrderTracker, bool) {
-	o.orderTrackerMutex.RLock()
-	defer o.orderTrackerMutex.RUnlock()
-	tracker, ok := o.orderTrackers[orderID]
-	return tracker, ok
+	o.orderMutex.RLock()
+	defer o.orderMutex.RUnlock()
+	return o.orders.Get(orderID)
 }
 
-func (o *OrderBook) setOrderTracker(tracker OrderTracker) error {
-	o.orderTrackerMutex.Lock()
-	defer o.orderTrackerMutex.Unlock()
-	if _, ok := o.orderTrackers[tracker.OrderID]; ok {
-		return fmt.Errorf("order tracker with ID %d already exists", tracker.OrderID)
-	}
-	o.orderTrackers[tracker.OrderID] = tracker
-	return nil
-}
-
-func (o *OrderBook) removeOrderTracker(orderID uint64) {
-	o.orderTrackerMutex.Lock()
-	defer o.orderTrackerMutex.Unlock()
-	delete(o.orderTrackers, orderID)
-}
-
-// todo: implement callbacks
 func (o *OrderBook) Add(order Order) (bool, error) {
 	if order.Qty <= MinQty { // check the qty
 		return false, ErrInvalidQty
@@ -280,10 +224,10 @@ func (o *OrderBook) submit(order Order) (bool, error) {
 
 	if order.IsBid() {
 		// order is a bid, match with asks
-		matched, _ = o.matchOrder(&order, o.asks)
+		matched, _ = o.matchOrder(&order, o.orders.Asks)
 	} else {
 		// order is an ask, match with bids
-		matched, _ = o.matchOrder(&order, o.bids)
+		matched, _ = o.matchOrder(&order, o.orders.Bids)
 	}
 
 	addToBooks := true

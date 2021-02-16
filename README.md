@@ -65,13 +65,13 @@ Order book & trade books are per-instrument objects, one order book can only han
 The current figures are without implemented stop orders, manual cancellations and persistent storage. They are mostly a
 representation of in-memory order matching throughput.
 
-`BenchmarkOrderBook_Add-12    	 1000000	      1199 ns/op	     235 B/op	       3 allocs/op`
+`BenchmarkOrderBook_Add-12    	 1000000	      1076 ns/op	     235 B/op	       3 allocs/op`
 
-Each order insertion to the order book takes about 1.2 μs, which means we can (theoretically) match ~834k orders in 1
+Each order insertion to the order book takes about 1.1 μs, which means we can (theoretically) match ~930k orders in 1
 second.
 
-After all insertions 289349744 bytes (~289MB in use for about 118k active orders - ~2.4kB/order) are in use, before
-insertions 208124256 bytes. Reported allocations are around 235 B/op. About 28% of total memory usage comes through the
+After all insertions 289353784 bytes (~289MB in use for about 118k active orders - ~2.4kB/order) are in use, before
+insertions 208121272 bytes. Reported allocations are around 235 B/op. About 28% of total memory usage comes through the
 Add method, 39% increase from the setup state.
 
 Huge performance improvements came from OrderTracker tracking only nanoseconds as timestamps, prices as float64s and
