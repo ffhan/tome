@@ -5,11 +5,15 @@ import (
 	"sort"
 )
 
+// Container object that stores bids an asks for a specified instrument.
+// It doesn't store Orders, but OrderTrackers (for faster operation)
+// Handles fast and efficient insertion, removal, retrieval, sorting and filtering of orders.
 type orderContainer struct {
 	Bids, Asks *orderMap
 	trackers   map[uint64]OrderTracker
 }
 
+// Create a new order container with specified LessFuncs.
 func NewOrderContainer(bidLess, askLess LessFunc) *orderContainer {
 	return &orderContainer{
 		Bids:     newOrderMap(bidLess),
@@ -18,6 +22,7 @@ func NewOrderContainer(bidLess, askLess LessFunc) *orderContainer {
 	}
 }
 
+// Add an order tracker.
 func (o *orderContainer) Add(tracker OrderTracker) {
 	if tracker.Side == SideBuy {
 		o.Bids.Set(tracker, true)
@@ -27,6 +32,7 @@ func (o *orderContainer) Add(tracker OrderTracker) {
 	o.trackers[tracker.OrderID] = tracker
 }
 
+// Remove an order tracker.
 func (o *orderContainer) Remove(id uint64) {
 	tracker, ok := o.trackers[id]
 	if !ok {
@@ -41,11 +47,13 @@ func (o *orderContainer) Remove(id uint64) {
 	}
 }
 
+// Get a tracker by its order ID.
 func (o *orderContainer) Get(id uint64) (OrderTracker, bool) {
 	t, ok := o.trackers[id]
 	return t, ok
 }
 
+// Get an OrderTracker iterator which iterates through sorted bids or asks.
 func (o *orderContainer) Iterator(side OrderSide) forwardIteratorOrderMap {
 	if side == SideBuy {
 		return o.Bids.Iterator()
@@ -53,6 +61,7 @@ func (o *orderContainer) Iterator(side OrderSide) forwardIteratorOrderMap {
 	return o.Asks.Iterator()
 }
 
+// Returns the number of bids or asks in the container.
 func (o *orderContainer) Len(side OrderSide) int {
 	if side == SideBuy {
 		return o.Bids.Len()

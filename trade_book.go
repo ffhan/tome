@@ -5,6 +5,8 @@ import (
 	"sync"
 )
 
+// Trade book stores all daily trades in-memory.
+// It flushes new trades periodically to persistent storage. (TODO)
 type TradeBook struct {
 	Instrument string
 
@@ -12,6 +14,7 @@ type TradeBook struct {
 	tradeMutex sync.RWMutex
 }
 
+// Create a new trade book.
 func NewTradeBook(instrument string) *TradeBook {
 	return &TradeBook{
 		Instrument: instrument,
@@ -19,6 +22,7 @@ func NewTradeBook(instrument string) *TradeBook {
 	}
 }
 
+// Enter a new trade.
 func (t *TradeBook) Enter(trade Trade) {
 	t.tradeMutex.Lock()
 	defer t.tradeMutex.Unlock()
@@ -26,16 +30,7 @@ func (t *TradeBook) Enter(trade Trade) {
 	t.trades[trade.ID] = trade
 }
 
-func (t *TradeBook) Reject(tradeID uint64) {
-	t.tradeMutex.Lock()
-	defer t.tradeMutex.Unlock()
-
-	if trade, ok := t.trades[tradeID]; ok {
-		trade.Rejected = true
-		t.trades[tradeID] = trade
-	}
-}
-
+// Return all daily trades in a trade book.
 func (t *TradeBook) DailyTrades() []Trade {
 	t.tradeMutex.RLock()
 	defer t.tradeMutex.RUnlock()

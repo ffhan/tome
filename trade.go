@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Trade represents two opposed matched orders.
 type Trade struct {
 	ID            uint64
 	Buyer, Seller uuid.UUID
@@ -14,7 +15,6 @@ type Trade struct {
 	Price         apd.Decimal
 	Total         apd.Decimal
 	Timestamp     time.Time
-	Rejected      bool // trade rejection (e.g. because of IOC)
 
 	BidOrderID uint64
 	AskOrderID uint64

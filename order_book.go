@@ -28,6 +28,7 @@ var (
 	}
 )
 
+// Order book contains all active orders for an instrument, handles matching and storage of orders and subsequent trades.
 type OrderBook struct {
 	Instrument string // instrument name
 
@@ -36,43 +37,49 @@ type OrderBook struct {
 
 	tradeBook *TradeBook // trade book ptr
 
-	orderRepo    OrderRepository
-	activeOrders map[uint64]Order
+	orderRepo    OrderRepository  // persistent order storage
+	activeOrders map[uint64]Order // quick order retrieval by ID
 
-	orders     *orderContainer
-	stopOrders *orderContainer
+	orders     *orderContainer // contains all orders sorted by our preferences
+	stopOrders *orderContainer // contains all stop orders sorted by our preferences
 
 	orderMutex sync.RWMutex
 	matchMutex sync.Mutex // mutex that ensures that matching is always sequential
 }
 
+// function that compares two OrderTrackers and returns true if a is less or equal than b
 type LessFunc func(a, b OrderTracker) bool
 
 // FIFO - https://corporatefinanceinstitute.com/resources/knowledge/trading-investing/matching-orders/
 func makeComparator(priceDescending bool) LessFunc {
-	factor := -1
+	const (
+		ascending  bool = true
+		descending bool = false
+	)
+	sort := ascending
 	if priceDescending {
-		factor = 1
+		sort = descending
 	}
 	return func(a, b OrderTracker) bool {
-		if a.Type == TypeMarket && b.Type != TypeMarket {
+		if a.Type == TypeMarket && b.Type != TypeMarket { // market orders first
 			return true
 		} else if a.Type != TypeMarket && b.Type == TypeMarket {
 			return false
 		} else if a.Type == TypeMarket && b.Type == TypeMarket {
 			return a.Timestamp < b.Timestamp // if both market order by time
 		}
-		priceCmp := a.Price - b.Price
-		if priceCmp == 0 {
+		priceCmp := a.Price - b.Price // compare prices
+		if priceCmp == 0 {            // if prices are equal, compare timestamps
 			return a.Timestamp < b.Timestamp
 		}
-		if priceCmp < 0 {
-			return factor == -1
+		if priceCmp < 0 { // if a price is less than b return true if ascending, false if descending
+			return sort
 		}
-		return factor == 1
+		return !sort // if a price is bigger than b return false if ascending, true if descending
 	}
 }
 
+// Create a new order book.
 func NewOrderBook(instrument string, marketPrice apd.Decimal, tradeBook *TradeBook, orderRepo OrderRepository) *OrderBook {
 	bidLess := makeComparator(true)
 	askLess := makeComparator(false)
@@ -87,6 +94,7 @@ func NewOrderBook(instrument string, marketPrice apd.Decimal, tradeBook *TradeBo
 	}
 }
 
+// Get all bids ordered the same way they are matched.
 func (o *OrderBook) GetBids() []Order {
 	orders := make([]Order, 0, o.orders.Len(SideBuy))
 	for iter := o.orders.Iterator(SideBuy); iter.Valid(); iter.Next() {
@@ -95,6 +103,7 @@ func (o *OrderBook) GetBids() []Order {
 	return orders
 }
 
+// Get all asks ordered the same way they are matched.
 func (o *OrderBook) GetAsks() []Order {
 	orders := make([]Order, 0, o.orders.Len(SideSell))
 	for iter := o.orders.Iterator(SideSell); iter.Valid(); iter.Next() {
@@ -103,18 +112,21 @@ func (o *OrderBook) GetAsks() []Order {
 	return orders
 }
 
+// Get a market price.
 func (o *OrderBook) MarketPrice() apd.Decimal {
 	o.marketPriceMutex.RLock()
 	defer o.marketPriceMutex.RUnlock()
 	return o.marketPrice
 }
 
+// Set a market price.
 func (o *OrderBook) SetMarketPrice(price apd.Decimal) {
 	o.marketPriceMutex.Lock()
 	defer o.marketPriceMutex.Unlock()
 	o.marketPrice = price
 }
 
+// Get an order from activeOrders map.
 func (o *OrderBook) getActiveOrder(id uint64) (Order, bool) {
 	o.orderMutex.RLock()
 	defer o.orderMutex.RUnlock()
@@ -122,6 +134,7 @@ func (o *OrderBook) getActiveOrder(id uint64) (Order, bool) {
 	return order, ok
 }
 
+// Insert an order in activeOrders map.
 func (o *OrderBook) setActiveOrder(order Order) error {
 	o.orderMutex.Lock()
 	defer o.orderMutex.Unlock()
@@ -132,6 +145,7 @@ func (o *OrderBook) setActiveOrder(order Order) error {
 	return nil
 }
 
+// Add an order to books - make it matchable against other orders.
 func (o *OrderBook) addToBooks(order Order) error {
 	price, err := order.Price.Float64() // might be really slow
 	if err != nil {
@@ -155,6 +169,7 @@ func (o *OrderBook) addToBooks(order Order) error {
 	return o.orderRepo.Save(order)
 }
 
+// Update an active order.
 func (o *OrderBook) updateActiveOrder(order Order) error {
 	o.orderMutex.Lock()
 	defer o.orderMutex.Unlock()
@@ -165,6 +180,7 @@ func (o *OrderBook) updateActiveOrder(order Order) error {
 	return o.orderRepo.Save(order)
 }
 
+// Removes an order from books - removes it from possible matches.
 func (o *OrderBook) removeFromBooks(orderID uint64) {
 	order, ok := o.getActiveOrder(orderID)
 	if !ok {
@@ -180,6 +196,7 @@ func (o *OrderBook) removeFromBooks(orderID uint64) {
 	o.orderMutex.Unlock()
 }
 
+// Cancel an order.
 func (o *OrderBook) Cancel(id uint64) error {
 	o.orderMutex.RLock()
 	order, ok := o.activeOrders[id]
@@ -189,15 +206,18 @@ func (o *OrderBook) Cancel(id uint64) error {
 		return nil
 	}
 	order.Cancel()
-	return o.updateActiveOrder(order)
+	return o.updateActiveOrder(order) // todo: remove from active orders
 }
 
+// get an OrderTracker from order ID. Returns false if OrderTracker under that ID doesn't exist.
 func (o *OrderBook) getOrderTracker(orderID uint64) (OrderTracker, bool) {
 	o.orderMutex.RLock()
 	defer o.orderMutex.RUnlock()
 	return o.orders.Get(orderID)
 }
 
+// Add a new order. Order can be matched immediately or later (or never), depending on order parameters and order type.
+// Returns true if order was matched (partially or fully), false otherwise.
 func (o *OrderBook) Add(order Order) (bool, error) {
 	if order.Qty <= MinQty { // check the qty
 		return false, ErrInvalidQty
@@ -219,6 +239,7 @@ func (o *OrderBook) Add(order Order) (bool, error) {
 	return matched, nil
 }
 
+// submit an order for matching and store it. Returns true if matched (partially or fully), false if not.
 func (o *OrderBook) submit(order Order) (bool, error) {
 	var matched bool
 
@@ -248,6 +269,7 @@ func (o *OrderBook) submit(order Order) (bool, error) {
 	return matched, nil
 }
 
+// return a minimum of two int64s
 func min(q1, q2 int64) int64 {
 	if q1 <= q2 {
 		return q1
@@ -255,6 +277,7 @@ func min(q1, q2 int64) int64 {
 	return q2
 }
 
+// match an order against other offers, return if an order was matched (partially or not) and error if it occurs
 func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 	o.matchMutex.Lock()
 	defer o.matchMutex.Unlock()
