@@ -10,8 +10,9 @@ import (
 type TradeBook struct {
 	Instrument string
 
-	trades     map[uint64]Trade
-	tradeMutex sync.RWMutex
+	trades      map[uint64]Trade
+	tradeMutex  sync.RWMutex
+	lastTradeID uint64
 }
 
 // Create a new trade book.
@@ -27,7 +28,8 @@ func (t *TradeBook) Enter(trade Trade) {
 	t.tradeMutex.Lock()
 	defer t.tradeMutex.Unlock()
 
-	t.trades[trade.ID] = trade
+	t.trades[t.lastTradeID] = trade
+	t.lastTradeID += 1
 }
 
 // Return all daily trades in a trade book.

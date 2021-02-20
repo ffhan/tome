@@ -112,6 +112,24 @@ func (o *OrderBook) GetAsks() []Order {
 	return orders
 }
 
+// Get all stop bids.
+func (o *OrderBook) GetStopBids() []Order {
+	orders := make([]Order, 0, o.stopOrders.Len(SideBuy))
+	for iter := o.stopOrders.Iterator(SideBuy); iter.Valid(); iter.Next() {
+		orders = append(orders, o.activeOrders[iter.Key().OrderID])
+	}
+	return orders
+}
+
+// Get all stop asks.
+func (o *OrderBook) GetStopAsks() []Order {
+	orders := make([]Order, 0, o.stopOrders.Len(SideSell))
+	for iter := o.stopOrders.Iterator(SideSell); iter.Valid(); iter.Next() {
+		orders = append(orders, o.activeOrders[iter.Key().OrderID])
+	}
+	return orders
+}
+
 // Get a market price.
 func (o *OrderBook) MarketPrice() apd.Decimal {
 	o.marketPriceMutex.RLock()
@@ -120,10 +138,28 @@ func (o *OrderBook) MarketPrice() apd.Decimal {
 }
 
 // Set a market price.
-func (o *OrderBook) SetMarketPrice(price apd.Decimal) {
+func (o *OrderBook) SetMarketPrice(price apd.Decimal, fPrice float64) {
 	o.marketPriceMutex.Lock()
-	defer o.marketPriceMutex.Unlock()
 	o.marketPrice = price
+	o.marketPriceMutex.Unlock()
+
+	bids := o.stopOrders.GetBidsBelow(fPrice)
+	o.addOrders(bids)
+	asks := o.stopOrders.GetAsksAbove(fPrice)
+	o.addOrders(asks)
+}
+
+func (o *OrderBook) addOrders(trackers []OrderTracker) {
+	for _, bid := range trackers {
+		order, ok := o.getActiveOrder(bid.OrderID)
+		o.stopOrders.Remove(bid.OrderID)
+		if !ok {
+			panic(fmt.Errorf("order with ID %d not found", bid.OrderID))
+		}
+		if _, err := o.submit(order, bid); err != nil {
+			log.Println(err) // todo: better handling of these events
+		}
+	}
 }
 
 // Get an order from activeOrders map.
@@ -146,22 +182,13 @@ func (o *OrderBook) setActiveOrder(order Order) error {
 }
 
 // Add an order to books - make it matchable against other orders.
-func (o *OrderBook) addToBooks(order Order) error {
-	price, err := order.Price.Float64() // might be really slow
-	if err != nil {
-		return err
-	}
-	tracker := OrderTracker{
-		Price:     price,
-		Timestamp: order.Timestamp.UnixNano(),
-		OrderID:   order.ID,
-		Type:      order.Type,
-		Side:      order.Side,
-	}
-
+func (o *OrderBook) addToBooks(tracker OrderTracker) {
 	o.orderMutex.Lock()
 	o.orders.Add(tracker) // enter pointer to the tree
 	o.orderMutex.Unlock()
+}
+
+func (o *OrderBook) storeOrder(order Order) error {
 	if err := o.setActiveOrder(order); err != nil {
 		o.orders.Remove(order.ID)
 		return err
@@ -231,24 +258,76 @@ func (o *OrderBook) Add(order Order) (bool, error) {
 	if order.Params.Is(ParamStop) && order.StopPrice.IsZero() {
 		return false, ErrInvalidStopPrice
 	}
-	// todo: handle stop orders, currently ignored
-	matched, err := o.submit(order)
+
+	orderPrice, err := order.Price.Float64()
 	if err != nil {
-		return matched, err
+		return false, err
 	}
-	return matched, nil
+
+	tracker := OrderTracker{
+		OrderID:   order.ID,
+		Type:      order.Type,
+		Price:     orderPrice,
+		Side:      order.Side,
+		Timestamp: order.Timestamp.UnixNano(),
+	}
+
+	if order.Params.Is(ParamStop) {
+		marketPrice := o.MarketPrice()
+
+		orderStopPrice, err := order.StopPrice.Float64()
+		if err != nil {
+			return false, err
+		}
+
+		tracker := OrderTracker{
+			OrderID:   order.ID,
+			Type:      order.Type,
+			Price:     orderStopPrice,
+			Side:      order.Side,
+			Timestamp: order.Timestamp.UnixNano(),
+		}
+
+		switch order.Side {
+		case SideBuy:
+			// if market price is lower than the bid stop price add as a stop order
+			// otherwise process immediately
+			if marketPrice.Cmp(&order.StopPrice) < 0 {
+				o.stopOrders.Add(tracker)
+				if err := o.storeOrder(order); err != nil {
+					return false, err
+				}
+				return false, nil
+			}
+		case SideSell:
+			// if market price is higher than the ask stop price add as a stop order
+			// otherwise proces immediately
+			if marketPrice.Cmp(&order.StopPrice) > 0 {
+				o.stopOrders.Add(tracker)
+				if err := o.storeOrder(order); err != nil {
+					return false, err
+				}
+				return false, nil
+			}
+		}
+	}
+
+	if err := o.storeOrder(order); err != nil {
+		return false, err
+	}
+	return o.submit(order, tracker)
 }
 
 // submit an order for matching and store it. Returns true if matched (partially or fully), false if not.
-func (o *OrderBook) submit(order Order) (bool, error) {
+func (o *OrderBook) submit(order Order, tracker OrderTracker) (bool, error) {
 	var matched bool
 
 	if order.IsBid() {
 		// order is a bid, match with asks
-		matched, _ = o.matchOrder(&order, o.orders.Asks)
+		matched, _ = o.matchOrder(tracker.Price, &order, o.orders.Asks)
 	} else {
 		// order is an ask, match with bids
-		matched, _ = o.matchOrder(&order, o.orders.Bids)
+		matched, _ = o.matchOrder(tracker.Price, &order, o.orders.Bids)
 	}
 
 	addToBooks := true
@@ -262,9 +341,10 @@ func (o *OrderBook) submit(order Order) (bool, error) {
 	}
 
 	if !order.IsFilled() && addToBooks {
-		if err := o.addToBooks(order); err != nil {
-			return matched, err
-		}
+		o.addToBooks(tracker)
+	}
+	if err := o.updateActiveOrder(order); err != nil {
+		return false, err
 	}
 	return matched, nil
 }
@@ -278,9 +358,9 @@ func min(q1, q2 int64) int64 {
 }
 
 // match an order against other offers, return if an order was matched (partially or not) and error if it occurs
-func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
-	o.matchMutex.Lock()
-	defer o.matchMutex.Unlock()
+func (o *OrderBook) matchOrder(orderPrice float64, order *Order, offers *orderMap) (bool, error) {
+	//o.matchMutex.Lock()
+	//defer o.matchMutex.Unlock()
 	// this method shouldn't handle stop orders
 	// we only have to take care of AON param (FOK will be handled in submit because of IOC) & market/limit types
 	var matched bool
@@ -328,6 +408,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 		}
 
 		var price apd.Decimal
+		var fPrice float64
 		switch order.Type { // look only after the best available price
 		case TypeMarket:
 			switch oppositeOrder.Type {
@@ -335,6 +416,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 				continue // two opposing market orders are usually forbidden (rejected) - continue matching
 			case TypeLimit:
 				price = oppositeOrder.Price // crossing the spread
+				fPrice = oppositeTracker.Price
 			default:
 				panicOnOrderType(oppositeOrder)
 			}
@@ -344,6 +426,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 				switch oppositeOrder.Type {
 				case TypeMarket: // we have a limit, they are selling at our price
 					price = myPrice
+					fPrice = orderPrice
 				case TypeLimit:
 					// check if we can cross the spread
 					if myPrice.Cmp(&oppositeOrder.Price) < 0 {
@@ -351,6 +434,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 					} else {
 						// our bid is higher or equal to their ask - set price to myPrice
 						price = myPrice // e.g. our bid is $20.10, their ask is $20 - trade executes at $20.10
+						fPrice = orderPrice
 					}
 				default:
 					panicOnOrderType(oppositeOrder)
@@ -359,6 +443,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 				switch oppositeOrder.Type {
 				case TypeMarket: // we have a limit, they are buying at our specified price
 					price = myPrice
+					fPrice = orderPrice
 				case TypeLimit:
 					// check if we can cross the spread
 					if myPrice.Cmp(&oppositeOrder.Price) > 0 {
@@ -367,6 +452,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 					} else {
 						// our ask is lower or equal to their bid - match!
 						price = oppositeOrder.Price // set price to their bid
+						fPrice = oppositeTracker.Price
 					}
 				default:
 					panicOnOrderType(oppositeOrder)
@@ -386,6 +472,14 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 		order.FilledQty += qty
 		oppositeOrder.FilledQty += qty
 
+		matched = true
+		if oppositeOrder.UnfilledQty() == 0 { // if the other order is filled completely - remove it from the order book
+			removeOrders = append(removeOrders, oppositeOrder.ID)
+		} else {
+			if err := o.updateActiveOrder(oppositeOrder); err != nil { // otherwise update it
+				return matched, err
+			}
+		}
 		o.tradeBook.Enter(Trade{
 			Buyer:      buyer,
 			Seller:     seller,
@@ -396,15 +490,7 @@ func (o *OrderBook) matchOrder(order *Order, offers *orderMap) (bool, error) {
 			BidOrderID: bidOrderID,
 			AskOrderID: askOrderID,
 		})
-		o.SetMarketPrice(price)
-		matched = true
-		if oppositeOrder.UnfilledQty() == 0 { // if the other order is filled completely - remove it from the order book
-			removeOrders = append(removeOrders, oppositeOrder.ID)
-		} else {
-			if err := o.updateActiveOrder(oppositeOrder); err != nil { // otherwise update it
-				return matched, err
-			}
-		}
+		o.SetMarketPrice(price, fPrice)
 		if order.IsFilled() {
 			return true, nil
 		}

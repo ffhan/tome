@@ -70,10 +70,10 @@ func (o *orderContainer) Len(side OrderSide) int {
 }
 
 // Get ask trackers below or equal the price. Sorted by time ascending.
-func (o *orderContainer) GetAsksBelow(price float64) []OrderTracker {
+func (o *orderContainer) GetAsksAbove(price float64) []OrderTracker {
 	trackers := make([]OrderTracker, 0)
 	for iter := o.Asks.Iterator(); iter.Valid(); iter.Next() {
-		if iter.Key().Price <= price {
+		if iter.Key().Price >= price {
 			trackers = append(trackers, iter.Key())
 		} else {
 			break // iterator returns a sorted array, if price is bigger we don't have to look any further
@@ -86,10 +86,10 @@ func (o *orderContainer) GetAsksBelow(price float64) []OrderTracker {
 }
 
 // Get bid trackers above or equal the price. Sorted by time ascending.
-func (o *orderContainer) GetBidsAbove(price float64) []OrderTracker {
+func (o *orderContainer) GetBidsBelow(price float64) []OrderTracker {
 	trackers := make([]OrderTracker, 0)
 	for iter := o.Bids.Iterator(); iter.Valid(); iter.Next() {
-		if iter.Key().Price >= price {
+		if iter.Key().Price <= price {
 			trackers = append(trackers, iter.Key())
 		} else {
 			break // iterator returns a sorted array, if price is bigger we don't have to look any further

@@ -51,6 +51,7 @@ func TestOrderContainer_Add(t *testing.T) {
 	}
 }
 
+// todo: fix GetBidsBelow and GetAsksAbove tests, they were inverted
 func TestOrderContainer_GetBidsAbove(t *testing.T) {
 	c := NewOrderContainer(makeComparator(true), makeComparator(false)) // simulate stop order container
 
@@ -70,7 +71,7 @@ func TestOrderContainer_GetBidsAbove(t *testing.T) {
 		c.Add(o)
 	}
 
-	above := c.GetBidsAbove(20.25)
+	above := c.GetBidsBelow(20.25)
 
 	if len(above) != len(results) {
 		t.Fatalf("expected %d results, got %d", len(results), len(above))
@@ -105,7 +106,7 @@ func TestOrderContainer_GetAsksBelow(t *testing.T) {
 		c.Add(o)
 	}
 
-	above := c.GetAsksBelow(20.25)
+	above := c.GetAsksAbove(20.25)
 
 	if len(above) != len(results) {
 		t.Fatalf("expected %d results, got %d", len(results), len(above))
@@ -174,6 +175,6 @@ func BenchmarkOrderContainer_GetBidsAbove(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_ = c.GetBidsAbove(orders[i].Price)
+		_ = c.GetBidsBelow(orders[i].Price)
 	}
 }

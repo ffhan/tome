@@ -585,7 +585,6 @@ func TestOrderBook_Add_MarketPrice_Change(t *testing.T) {
 }
 
 func BenchmarkOrderBook_Add(b *testing.B) {
-	b.ReportAllocs()
 	var match bool
 	var err error
 	_, ob := setup(2025, -2)
@@ -599,6 +598,7 @@ func BenchmarkOrderBook_Add(b *testing.B) {
 	runtime.GC()
 
 	measureMemory(b)
+	b.ReportAllocs()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

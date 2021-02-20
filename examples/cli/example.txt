@@ -1,0 +1,5 @@
+buy 20 market stop 25
+sell 50 limit 24
+buy 40 market
+sell 20 limit 23.56
+buy 10 limit 26 FOK

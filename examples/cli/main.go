@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/olekukonko/tablewriter"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -24,9 +23,9 @@ func main() {
 	fmt.Print("enter instruction:")
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
-		c := exec.Command("clear")
-		c.Stdout = os.Stdout
-		c.Run()
+		//c := exec.Command("clear")
+		//c.Stdout = os.Stdout
+		//c.Run()
 
 		split := strings.Split(scanner.Text(), " ")
 		fmt.Printf("instructions: %v\n", split)
@@ -54,7 +53,7 @@ func order(side tome.OrderSide, ob *tome.OrderBook, split []string) {
 	)
 	currentOrderID += 1
 
-	var price float64
+	var price, stopPrice float64
 	var Type tome.OrderType
 	var err error
 	if split[orderType] == "market" {
@@ -82,12 +81,17 @@ func order(side tome.OrderSide, ob *tome.OrderBook, split []string) {
 		oParams -= 1
 	}
 
-	for _, param := range split[oParams:] { // todo: after GFD & STOP expect a value
-		switch param {
+	for i, param := range split[oParams:] { // todo: after GFD & STOP expect a value
+		switch strings.ToUpper(param) {
 		case "AON":
 			params |= tome.ParamAON
 		case "STOP":
 			params |= tome.ParamStop
+			stopPrice, err = strconv.ParseFloat(split[oParams+i+1], 64)
+			if err != nil {
+				panic(err)
+			}
+			i += 1
 		case "IOC":
 			params |= tome.ParamIOC
 		case "FOK":
@@ -112,7 +116,7 @@ func order(side tome.OrderSide, ob *tome.OrderBook, split []string) {
 		Qty:        int64(qty),
 		FilledQty:  0,
 		Price:      *apd.New(int64(price*10000), -4),
-		StopPrice:  apd.Decimal{},
+		StopPrice:  *apd.New(int64(stopPrice*10000), -4),
 		Side:       side,
 		Cancelled:  false,
 	}
@@ -125,8 +129,13 @@ func print(ob *tome.OrderBook, tb *tome.TradeBook) {
 	bids := ob.GetBids()
 	asks := ob.GetAsks()
 
-	printOrders(bids)
-	printOrders(asks)
+	stopBids := ob.GetStopBids()
+	stopAsks := ob.GetStopAsks()
+
+	printOrders("bids", bids)
+	printOrders("asks", asks)
+	printOrders("stop bids", stopBids)
+	printOrders("stop asks", stopAsks)
 	trades := tb.DailyTrades()
 	printTrades(trades)
 	marketPrice := ob.MarketPrice()
@@ -144,15 +153,17 @@ func printTrades(trades []tome.Trade) {
 		writer.Append([]string{trade.Timestamp.String(), strconv.Itoa(int(trade.BidOrderID)), strconv.Itoa(int(trade.AskOrderID)),
 			strconv.Itoa(int(trade.Qty)), trade.Price.String(), strconv.FormatFloat(price*float64(qty), 'f', -1, 64)})
 	}
+	writer.SetCaption(true, "trades")
 	writer.Render()
 }
 
-func printOrders(orders []tome.Order) {
+func printOrders(title string, orders []tome.Order) {
 	writer := tablewriter.NewWriter(os.Stdout)
-	writer.SetHeader([]string{"ID", "type", "price", "time", "qty", "filledQty", "params"})
+	writer.SetHeader([]string{"ID", "type", "price", "stop price", "time", "qty", "filledQty", "params"})
 	for _, order := range orders {
-		writer.Append([]string{strconv.Itoa(int(order.ID)), order.Type.String(), order.Price.String(),
+		writer.Append([]string{strconv.Itoa(int(order.ID)), order.Type.String(), order.Price.String(), order.StopPrice.String(),
 			order.Timestamp.String(), strconv.Itoa(int(order.Qty)), strconv.Itoa(int(order.FilledQty)), order.Params.String()})
 	}
+	writer.SetCaption(true, title)
 	writer.Render()
 }
