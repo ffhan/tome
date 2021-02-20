@@ -7,7 +7,9 @@ import (
 	"github.com/ffhan/tome"
 	"github.com/google/uuid"
 	"github.com/olekukonko/tablewriter"
+	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -15,32 +17,152 @@ import (
 
 var currentOrderID uint64
 
+type printEvent byte
+
+const (
+	printNever  printEvent = iota
+	printAlways printEvent = iota
+	printOnTrade
+)
+
+type settings struct {
+	printEvent        printEvent
+	clearBeforePrint  bool
+	printComments     bool
+	printInstructions bool
+	instructionPrompt bool
+}
+
 func main() {
 	const instrument = "TEST"
 	tb := tome.NewTradeBook(instrument)
 	ob := tome.NewOrderBook(instrument, *apd.New(2025, -2), tb, tome.NOPOrderRepository)
 
-	fmt.Print("enter instruction:")
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		//c := exec.Command("clear")
-		//c.Stdout = os.Stdout
-		//c.Run()
+	s := settings{
+		printEvent:        printAlways,
+		clearBeforePrint:  true,
+		printComments:     false,
+		instructionPrompt: true,
+		printInstructions: true,
+	}
 
-		split := strings.Split(scanner.Text(), " ")
-		fmt.Printf("instructions: %v\n", split)
+	scanner := bufio.NewScanner(os.Stdin)
+
+	lenTrades := 0
+
+	for {
+		if s.instructionPrompt {
+			fmt.Print("enter instruction:")
+		}
+		if !scanner.Scan() {
+			break
+		}
+
+		if s.clearBeforePrint {
+			c := exec.Command("clear")
+			c.Stdout = os.Stdout
+			c.Run()
+		}
+
+		text := scanner.Text()
+		if strings.HasPrefix(text, "#") { // if text begins with a comment ignore the line
+			if s.printComments {
+				fmt.Println(text)
+			}
+			continue
+		}
+		commentIndex := strings.Index(text, "#")
+		if commentIndex == 0 { // whole line is a comment, skip the line
+			continue
+		} else if commentIndex > 0 {
+			comment := text[commentIndex:]
+			text = text[:commentIndex]
+			if s.printComments {
+				fmt.Println(comment)
+			}
+		}
+		split := strings.Split(text, " ")
+
+		if s.printInstructions {
+			fmt.Printf("instructions: %v\n", split)
+		}
 		action := split[0]
 
-		if action == "print" {
+		switch action {
+		case "print":
 			print(ob, tb)
-		} else if action == "buy" {
+			continue
+		case "buy":
 			order(tome.SideBuy, ob, split)
-			print(ob, tb)
-		} else if action == "sell" {
+		case "sell":
 			order(tome.SideSell, ob, split)
-			print(ob, tb)
+		case "set":
+			updateSettings(&s, split)
+			continue
+		case "settings":
+			fmt.Printf("%+v\n", s)
 		}
-		fmt.Print("enter instruction:")
+
+		switch s.printEvent {
+		case printAlways:
+			print(ob, tb)
+		case printOnTrade:
+			newTrades := len(tb.DailyTrades())
+			if newTrades > lenTrades {
+				lenTrades = newTrades
+				print(ob, tb)
+			}
+		}
+	}
+}
+
+func updateSettings(s *settings, split []string) {
+	switch split[1] {
+	case "print":
+		switch split[2] {
+		case "always":
+			s.printEvent = printAlways
+		case "never":
+			s.printEvent = printNever
+		case "trade":
+			s.printEvent = printOnTrade
+		case "comments":
+			switch split[3] {
+			case "true", "y", "yes", "t":
+				s.printComments = true
+			case "false", "n", "no", "f":
+				s.printComments = false
+			default:
+				log.Println("invalid print comment setting")
+			}
+		case "instructions":
+			switch split[3] {
+			case "true", "y", "yes", "t":
+				s.printInstructions = true
+			case "false", "n", "no", "f":
+				s.printInstructions = false
+			default:
+				log.Println("invalid print instructions setting")
+			}
+		default:
+			log.Println("invalid print setting")
+		}
+	case "clear":
+		switch split[2] {
+		case "true", "y", "yes", "t":
+			s.clearBeforePrint = true
+		case "false", "n", "no", "f":
+			s.clearBeforePrint = false
+		default:
+			log.Println("invalid clear setting")
+		}
+	case "prompt":
+		switch split[2] {
+		case "true", "y", "yes", "t":
+			s.instructionPrompt = true
+		case "false", "n", "no", "f":
+			s.instructionPrompt = false
+		}
 	}
 }
 
@@ -66,7 +188,8 @@ func order(side tome.OrderSide, ob *tome.OrderBook, split []string) {
 		}
 		Type = tome.TypeLimit
 	} else {
-		panic("invalid order type")
+		log.Println("invalid order type")
+		return
 	}
 
 	qty, err := strconv.Atoi(split[orderQty])
@@ -82,25 +205,25 @@ func order(side tome.OrderSide, ob *tome.OrderBook, split []string) {
 	}
 
 	for i, param := range split[oParams:] { // todo: after GFD & STOP expect a value
-		switch strings.ToUpper(param) {
-		case "AON":
+		switch param {
+		case "aon":
 			params |= tome.ParamAON
-		case "STOP":
+		case "stop":
 			params |= tome.ParamStop
 			stopPrice, err = strconv.ParseFloat(split[oParams+i+1], 64)
 			if err != nil {
 				panic(err)
 			}
 			i += 1
-		case "IOC":
+		case "ioc":
 			params |= tome.ParamIOC
-		case "FOK":
+		case "fok":
 			params |= tome.ParamFOK
-		case "GTC":
+		case "gtc":
 			params |= tome.ParamGTC
-		case "GFD":
+		case "gfd":
 			params |= tome.ParamGFD
-		case "GTD":
+		case "gtd":
 			params |= tome.ParamGTD
 			//time.Parse(time.RFC822Z, split[len(split)-1])
 		}

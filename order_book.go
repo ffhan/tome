@@ -79,10 +79,43 @@ func makeComparator(priceDescending bool) LessFunc {
 	}
 }
 
+func makeStopComparator(priceDescending bool) LessFunc {
+	const (
+		ascending  bool = true
+		descending bool = false
+	)
+	sort := ascending
+	if priceDescending {
+		sort = descending
+	}
+	return func(a, b OrderTracker) bool { // ignores order types because we're always comparing stop prices
+		priceCmp := a.Price - b.Price // compare prices
+		if priceCmp == 0 {            // if prices are equal, compare timestamps
+			return a.Timestamp < b.Timestamp
+		}
+		if priceCmp < 0 { // if a price is less than b return true if ascending, false if descending
+			return sort
+		}
+		return !sort // if a price is bigger than b return false if ascending, true if descending
+	}
+}
+
 // Create a new order book.
 func NewOrderBook(instrument string, marketPrice apd.Decimal, tradeBook *TradeBook, orderRepo OrderRepository) *OrderBook {
 	bidLess := makeComparator(true)
 	askLess := makeComparator(false)
+	/*
+		Note for stop ordering: it makes much more sense to order bids ascending (in reverse of normal bid price ordering)
+		because lower prices will more likely be passed by a market price. Higher stop prices are less likely to be
+		passed by a market price, therefore we would have to skip a lot of orders to get to stop orders which are likely to be activated.
+
+		Therefore, when calling GetBidsBelow it makes much more sense to start from the lowest stop price, compare it with the market price
+		(is the stop price lower than the current market price) and if it's not - break (other prices are going to be even higher than the market price).
+
+		The same logic applies to asks, just in reverse.
+	*/
+	stopBidLess := makeStopComparator(false)
+	stopAskLess := makeStopComparator(true)
 	return &OrderBook{
 		Instrument:   instrument,
 		marketPrice:  marketPrice,
@@ -90,7 +123,7 @@ func NewOrderBook(instrument string, marketPrice apd.Decimal, tradeBook *TradeBo
 		orderRepo:    orderRepo,
 		activeOrders: make(map[uint64]Order),
 		orders:       NewOrderContainer(bidLess, askLess),
-		stopOrders:   NewOrderContainer(bidLess, askLess),
+		stopOrders:   NewOrderContainer(stopBidLess, stopAskLess),
 	}
 }
 

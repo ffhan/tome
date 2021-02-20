@@ -1,5 +1,21 @@
-buy 20 market stop 25
-sell 50 limit 24
-buy 40 market
-sell 20 limit 23.56
-buy 10 limit 26 FOK
+set clear false
+set prompt no # don't print "enter instruction:" prompt
+set print instructions n # don't print instructions
+set print trade # print the books only when a trade happens
+set print comments yes # print out comments
+buy 200 market # buy 200 shares at market price
+# following stop bids will be activated when market price reaches above their stop prices,
+# but the order price is not the same as stop price
+buy 20 limit 25 stop 24 # set a stop bid at limit 25, activated when market price passes 24
+buy 30 limit 24 stop 23 # set a stop bid at limit 24, activated when market price passes 23
+print
+sell 100 limit 23.5 FOK # fill-or-kill sell 100 shares at limit of 23.5 (don't sell below that)
+# last order will be matched with the first order, market price is now set at 23.5
+# market price 23.5 activates the stop order set at 23, it's added to the books but isn't matched since there aren't opposing sellers
+sell 150 limit 24 # sell 150 shares at market price
+# sell order is matched with the recently activated stop order and sold at price of 24
+# the new market price is now 24, which activates the first stop order and is sold at price of 25
+# the sell order has been matched first against the order 1 market bid, then the last stop bid at price 25 and
+# then at the first stop bid at price 24
+# stop orders have not been matched in order of time when they were added to the books, but ordered by price and then time
+

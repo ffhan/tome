@@ -585,6 +585,9 @@ func TestOrderBook_Add_MarketPrice_Change(t *testing.T) {
 }
 
 func BenchmarkOrderBook_Add(b *testing.B) {
+	//ballast := make([]byte, 1<<30) // 1GB of memory ballast, to reduce round trips to the kernel
+	//_ = ballast
+
 	var match bool
 	var err error
 	_, ob := setup(2025, -2)
@@ -595,7 +598,6 @@ func BenchmarkOrderBook_Add(b *testing.B) {
 		orders[i] = order
 	}
 	b.Logf("b.N: %d bids: %d asks: %d orders: %d ", b.N, ob.orders.Bids.Len(), ob.orders.Asks.Len(), len(ob.activeOrders))
-	runtime.GC()
 
 	measureMemory(b)
 	b.ReportAllocs()
@@ -622,7 +624,7 @@ func measureMemory(b *testing.B) {
 }
 
 func createRandomOrder(i int) Order {
-	isMarket := rand.Int()%8 == 0
+	isMarket := rand.Int()%20 == 0
 	isBuy := rand.Int()%2 == 0
 	isAON := rand.Int()%20 == 0
 	isIOC := rand.Int()%25 == 0
