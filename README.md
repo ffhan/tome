@@ -30,6 +30,7 @@ An example is provided at the end of the document.
     * market order - execute an order as fast as possible, cross the spread
     * limit order - execute an order with a limit on bid/ask price (e.g. $x or less for a bid, or $y or more for an ask)
 * order params
+    * STOP - stop order, set a stop price which will activate the order once the market price crosses it
     * AON - all or nothing, don't allow partial fills
     * IOC - immediate or cancel, immediately fill what's possible, cancel the rest
     * FOK - AON+IOC, immediately match an order in full (without partial fills) or cancel it
