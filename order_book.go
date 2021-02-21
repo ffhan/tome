@@ -129,6 +129,8 @@ func NewOrderBook(instrument string, marketPrice apd.Decimal, tradeBook *TradeBo
 
 // Get all bids ordered the same way they are matched.
 func (o *OrderBook) GetBids() []Order {
+	o.orderMutex.RLock()
+	defer o.orderMutex.RUnlock()
 	orders := make([]Order, 0, o.orders.Len(SideBuy))
 	for iter := o.orders.Iterator(SideBuy); iter.Valid(); iter.Next() {
 		orders = append(orders, o.activeOrders[iter.Key().OrderID])
@@ -138,6 +140,8 @@ func (o *OrderBook) GetBids() []Order {
 
 // Get all asks ordered the same way they are matched.
 func (o *OrderBook) GetAsks() []Order {
+	o.orderMutex.RLock()
+	defer o.orderMutex.RUnlock()
 	orders := make([]Order, 0, o.orders.Len(SideSell))
 	for iter := o.orders.Iterator(SideSell); iter.Valid(); iter.Next() {
 		orders = append(orders, o.activeOrders[iter.Key().OrderID])
@@ -147,6 +151,8 @@ func (o *OrderBook) GetAsks() []Order {
 
 // Get all stop bids.
 func (o *OrderBook) GetStopBids() []Order {
+	o.orderMutex.RLock()
+	defer o.orderMutex.RUnlock()
 	orders := make([]Order, 0, o.stopOrders.Len(SideBuy))
 	for iter := o.stopOrders.Iterator(SideBuy); iter.Valid(); iter.Next() {
 		orders = append(orders, o.activeOrders[iter.Key().OrderID])
@@ -156,6 +162,8 @@ func (o *OrderBook) GetStopBids() []Order {
 
 // Get all stop asks.
 func (o *OrderBook) GetStopAsks() []Order {
+	o.orderMutex.RLock()
+	defer o.orderMutex.RUnlock()
 	orders := make([]Order, 0, o.stopOrders.Len(SideSell))
 	for iter := o.stopOrders.Iterator(SideSell); iter.Valid(); iter.Next() {
 		orders = append(orders, o.activeOrders[iter.Key().OrderID])
@@ -345,9 +353,6 @@ func (o *OrderBook) Add(order Order) (bool, error) {
 		}
 	}
 
-	if err := o.storeOrder(order); err != nil {
-		return false, err
-	}
 	return o.submit(order, tracker)
 }
 
@@ -375,9 +380,9 @@ func (o *OrderBook) submit(order Order, tracker OrderTracker) (bool, error) {
 
 	if !order.IsFilled() && addToBooks {
 		o.addToBooks(tracker)
-	}
-	if err := o.updateActiveOrder(order); err != nil {
-		return false, err
+		if err := o.storeOrder(order); err != nil {
+			return matched, err
+		}
 	}
 	return matched, nil
 }

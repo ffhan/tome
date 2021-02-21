@@ -164,14 +164,16 @@ func TestOrderBook_Limit_To_Limit_Match(t *testing.T) {
 func TestOrderBook_Limit_To_Limit_Match_FullQty(t *testing.T) {
 	tb, ob := setup(2025, -2)
 
-	matched, err := ob.Add(createOrder(1, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideSell))
+	o1 := createOrder(1, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideSell)
+	matched, err := ob.Add(o1)
 	if err != nil {
 		t.Error(err)
 	}
 	if matched {
 		t.Errorf("expected no match for market order, got a match")
 	}
-	matched, err = ob.Add(createOrder(2, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy))
+	o2 := createOrder(2, TypeLimit, 0, 5, *apd.New(2012, -2), apd.Decimal{}, SideBuy)
+	matched, err = ob.Add(o2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -186,6 +188,9 @@ func TestOrderBook_Limit_To_Limit_Match_FullQty(t *testing.T) {
 	}
 	if ob.orders.Bids.Len() != 0 {
 		t.Errorf("expected 0 bids, got %d", ob.orders.Bids.Len())
+	}
+	if len(ob.activeOrders) != 0 {
+		t.Errorf("expected 0 active orders, got %d", len(ob.activeOrders))
 	}
 }
 
@@ -585,12 +590,12 @@ func TestOrderBook_Add_MarketPrice_Change(t *testing.T) {
 }
 
 func BenchmarkOrderBook_Add(b *testing.B) {
-	//ballast := make([]byte, 1<<30) // 1GB of memory ballast, to reduce round trips to the kernel
-	//_ = ballast
+	ballast := make([]byte, 1<<32) // 1GB of memory ballast, to reduce round trips to the kernel
+	_ = ballast
 
 	var match bool
 	var err error
-	_, ob := setup(2025, -2)
+	tb, ob := setup(2025, -2)
 
 	orders := make([]Order, b.N)
 	for i := range orders {
@@ -610,7 +615,12 @@ func BenchmarkOrderBook_Add(b *testing.B) {
 
 	_ = match
 	_ = err
-	b.Logf("orders len: %d bids len: %d asks len: %d", len(ob.activeOrders), ob.orders.Bids.Len(), ob.orders.Asks.Len())
+	b.Logf("orders len: %d bids len: %d asks len: %d trades len: %d", len(ob.activeOrders), ob.orders.Bids.Len(), ob.orders.Asks.Len(), len(tb.trades))
+
+	expectedOrderLen := ob.orders.Len(SideBuy) + ob.orders.Len(SideSell)
+	if len(ob.activeOrders) != expectedOrderLen {
+		b.Errorf("expected %d active orders, got %d", expectedOrderLen, len(ob.activeOrders))
+	}
 
 	measureMemory(b)
 }
@@ -629,8 +639,12 @@ func createRandomOrder(i int) Order {
 	isAON := rand.Int()%20 == 0
 	isIOC := rand.Int()%25 == 0
 
-	qty := int64(rand.Int()%190) + 10
-	price := apd.New(int64(2025+rand.Intn(200)-100), -2)
+	qty := int64(rand.Intn(1000)) + 10
+	fPrice := 2025 + rand.Intn(200) - 100
+	if isBuy {
+		fPrice += rand.Intn(150)
+	}
+	price := apd.New(int64(fPrice), -2)
 
 	oType := TypeLimit
 	if isMarket {

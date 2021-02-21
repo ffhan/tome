@@ -96,27 +96,25 @@ Order book & trade books are per-instrument objects, one order book can only han
 
 ## Performance
 
-The current figures are without implemented stop orders, manual cancellations and persistent storage. They are mostly a
+The current figures are without stop orders used in the benchmark, manual cancellations and persistent storage. They are mostly a
 representation of in-memory order matching throughput.
 
-`BenchmarkOrderBook_Add-12    	  813372	      1764 ns/op	     663 B/op	       8 allocs/op`
+`BenchmarkOrderBook_Add-12    	  921057	      1315 ns/op	     557 B/op	       8 allocs/op`
 
-Each order insertion to the order book takes about 1.8 μs, which means we can (theoretically) match ~560k orders in 1
+Each order insertion to the order book takes about 1.4 μs, which means we can (theoretically) match ~725k orders in 1
 second.
 
-After all insertions 568102904 bytes (~568MB in use for about 460k active orders - ~1.2kB/order) are in use, before
-insertions 210422952 bytes. Reported allocations are around 663 B/op. About 62% of total memory usage comes through the
-Add method, 164% increase from the setup state.
+After all insertions 504755456B bytes (~504MB in use for about 281 active orders + 919787 executed trades - ~548B/trade) are in use, before
+insertions 238263296 bytes. Reported allocations are around 553 B/op. About 52% of total memory usage comes through the
+Add method, 111% increase from the setup state.
 
 A big performance hit was suffered after stop orders were implemented - further optimizations will be necessary.
-Memory ballast definitely improves performance (about 3% improvement, which means additional 53k orders per second), but
-guarantees the process a certain amount of memory - which is not free to use by the rest of the system.
+Memory ballast definitely improves performance (about 3% improvement).
 
 Huge performance improvements came from OrderTracker tracking only nanoseconds as timestamps, prices as float64s and
 smarter memory management. My goal is to hit 500 ns/op to be able to hit 2 million operations per second.
 
-Current benchmark figures are currently without stop orders, but with a *huge* backlog of 400k unfilled orders, which definitely
-isn't a realistic scenario. Further improvements to randomization of orders will be necessary.
+Current benchmark figures are currently without stop orders, but they will be included as a separate benchmark.
 
 `cockroachdb/apd` gave a significant performance improvement over `shopspring/decimal` mainly because of huge memory
 usage improvement which drastically lowered the allocation rates (from 44 alloc/op to 4 alloc/op).

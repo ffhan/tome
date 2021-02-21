@@ -28,6 +28,7 @@ func (t *TradeBook) Enter(trade Trade) {
 	t.tradeMutex.Lock()
 	defer t.tradeMutex.Unlock()
 
+	trade.ID = t.lastTradeID
 	t.trades[t.lastTradeID] = trade
 	t.lastTradeID += 1
 }
